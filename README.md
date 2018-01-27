@@ -1,57 +1,98 @@
 # **Finding Lane Lines on the Road** 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
 <img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
 
-Overview
----
+# **Reflection**
 
-When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
+The finding lanes pipeline of this project consists of 6 steps:
+1. Convert the images to grayscale using the ***grayscale(image)*** function
+2. Apply gaussian blur using ***gaussian_blur(img, kernel_size)*** function to smooth the image
+3. Detect the edges using canny edge detection function ***canny(img, low_threshold, high_threshold)***
+4. Find the region of interest using ***region_of_interest(img, vertices)*** function to identify edges containing only the lane lines
+5. Draw hough lines using ***hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap)*** function
+6. Finally, overlay the image with hough lines over the original image using ***weighted_img(img, initial_img)*** function
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
+In order to draw a single solid line on both the left and right lanes, I modified the draw_lines() by splitting the lane lines into left and right lines by slope using ***find_slope(x1, y1, x2, y2)*** function
 
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
+```
+def find_slope(x1, y1, x2, y2):
+    return ((y2 - y1) / (x2 - x1))
+```
 
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
+Then, I eliminated the vertical lines
+
+```
+for line in lines:
+        for x1,y1,x2,y2 in line:
+            if x1 == x2:
+                continue
+```
+Then, I discarded lines with impossible slopes
+
+```
+if abs(slope) < .5 or abs(slope) > .9: continue
+```
+Next, I split the lines based on slope
+
+```
+if(slope > 0):
+                x1_left.append(x1)
+                x2_left.append(x2)
+                y1_left.append(y1)
+                y2_left.append(y2)
+            else: 
+                x1_right.append(x1)
+                x2_right.append(x2)
+                y1_right.append(y1)
+                y2_right.append(y2)
+```
+
+Then, I calculated the slope and intercept of the averaged lines using numpy's polyfit function
+
+```
+x1_right_avg = int(np.mean(x1_right))
+        x2_right_avg = int(np.mean(x2_right))
+        y1_right_avg = int(np.mean(y1_right))
+        y2_right_avg = int(np.mean(y2_right))
+        [slope_right, intercept_right] = np.polyfit((x1_right_avg, x2_right_avg), (y1_right_avg, y2_right_avg), 1)
+```
+```
+x1_left_avg = int(np.mean(x1_left))
+        x2_left_avg = int(np.mean(x2_left))
+        y1_left_avg = int(np.mean(y1_left))
+        y2_left_avg = int(np.mean(y2_left))
+        [slope_left, intercept_left] = np.polyfit((x1_left_avg, x2_left_avg), (y1_left_avg, y2_left_avg), 1)
+```
+Based on the slope and intercept of the left and right lines identified above, I have calculated the respective line points
+
+```
+right_y1 = image.shape[0]
+        right_y2 = int(right_y1 * 0.6)
+        right_x1 = int((right_y1 - intercept_right) / slope_right)
+        right_x2 = int((right_y2 - intercept_right) / slope_right)
+```
+```
+left_y1 = image.shape[0]
+        left_y2 = int(left_y1 * 0.6)
+        left_x1 = int((left_y1 - intercept_left) / slope_left)
+        left_x2 = int((left_y2 - intercept_left) / slope_left)
+```
+Finally, I plotted the lines on the image using opencv
+
+```
+cv2.line(img, (right_x1, right_y1), (right_x2, right_y2), color, thickness)
+cv2.line(img, (left_x1, left_y1), (left_x2, left_y2), color, thickness)
+```
+**Potential Short Comings**
+
+One potential shortcoming would be what would happen when the lines are curved. As seen in the challenge video, the lane lines are all over the place when they are curved. The current pipeline fits only the straight lines
+
+Another shortcoming would be the current pipeline might have trouble identifying lanes on steep roads as the region of interest is masked to around the center of the image
+
+**Possible Improvements**
+
+To detect curves effectively, fit the lines to polynomials of higher degree
+
+Modify the pipeline for smoother lines across video frames i.e. to avoid bouncing lines in the video
 
 
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
-
-1. Describe the pipeline
-
-2. Identify any shortcomings
-
-3. Suggest possible improvements
-
-We encourage using images in your writeup to demonstrate how your pipeline works.  
-
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
-
-
-The Project
----
-
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
-
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
-
-**Step 2:** Open the code in a Jupyter Notebook
-
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out <A HREF="https://www.packtpub.com/books/content/basics-jupyter-notebook-and-python" target="_blank">Cyrille Rossant's Basics of Jupyter Notebook and Python</A> to get started.
-
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
-
-`> jupyter notebook`
-
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
-
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
-# SDC_Finding_Lanes
